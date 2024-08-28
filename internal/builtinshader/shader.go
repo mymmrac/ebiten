@@ -15,10 +15,8 @@
 package builtinshader
 
 import (
-	"bytes"
-	"fmt"
+	"strings"
 	"sync"
-	"text/template"
 )
 
 type Filter int
@@ -50,58 +48,91 @@ var (
 	shadersM sync.Mutex
 )
 
-var tmpl = template.Must(template.New("tmpl").Parse(`//kage:unit pixels
+type shaderOptions struct {
+	Filter    Filter
+	Address   Address
+	UseColorM bool
+}
+
+func generateShader(options shaderOptions) []byte {
+	sb := &strings.Builder{}
+	sb.WriteString(`
+//kage:unit pixels
 
 package main
-
-{{if .UseColorM}}
+`)
+	if options.UseColorM {
+		sb.WriteString(`
 var ColorMBody mat4
 var ColorMTranslation vec4
-{{end}}
-
-{{if eq .Address .AddressRepeat}}
+`)
+	}
+	if options.Address == AddressRepeat {
+		sb.WriteString(`
 func adjustTexelForAddressRepeat(p vec2) vec2 {
 	origin := imageSrc0Origin()
 	size := imageSrc0Size()
 	return mod(p - origin, size) + origin
 }
-{{end}}
-
+`)
+	}
+	sb.WriteString(`
 func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
-{{if eq .Filter .FilterNearest}}
-{{if eq .Address .AddressUnsafe}}
+`)
+	switch options.Filter {
+	case FilterNearest:
+		switch options.Address {
+		case AddressUnsafe:
+			sb.WriteString(`
 	clr := imageSrc0UnsafeAt(srcPos)
-{{else if eq .Address .AddressClampToZero}}
+`)
+		case AddressClampToZero:
+			sb.WriteString(`
 	clr := imageSrc0At(srcPos)
-{{else if eq .Address .AddressRepeat}}
+`)
+		case AddressRepeat:
+			sb.WriteString(`
 	clr := imageSrc0At(adjustTexelForAddressRepeat(srcPos))
-{{end}}
-{{else if eq .Filter .FilterLinear}}
+`)
+		}
+	case FilterLinear:
+		sb.WriteString(`
 	p0 := srcPos - 1/2.0
 	p1 := srcPos + 1/2.0
-
-{{if eq .Address .AddressRepeat}}
-	p0 = adjustTexelForAddressRepeat(p0)
-	p1 = adjustTexelForAddressRepeat(p1)
-{{end}}
-
-{{if eq .Address .AddressUnsafe}}
+`)
+		switch options.Address {
+		case AddressUnsafe:
+			sb.WriteString(`
 	c0 := imageSrc0UnsafeAt(p0)
 	c1 := imageSrc0UnsafeAt(vec2(p1.x, p0.y))
 	c2 := imageSrc0UnsafeAt(vec2(p0.x, p1.y))
 	c3 := imageSrc0UnsafeAt(p1)
-{{else}}
+`)
+		case AddressClampToZero:
+			sb.WriteString(`
 	c0 := imageSrc0At(p0)
 	c1 := imageSrc0At(vec2(p1.x, p0.y))
 	c2 := imageSrc0At(vec2(p0.x, p1.y))
 	c3 := imageSrc0At(p1)
-{{end}}
+`)
+		case AddressRepeat:
+			sb.WriteString(`
+	p0 = adjustTexelForAddressRepeat(p0)
+	p1 = adjustTexelForAddressRepeat(p1)
 
+	c0 := imageSrc0At(p0)
+	c1 := imageSrc0At(vec2(p1.x, p0.y))
+	c2 := imageSrc0At(vec2(p0.x, p1.y))
+	c3 := imageSrc0At(p1)
+`)
+		}
+		sb.WriteString(`
 	rate := fract(p1)
 	clr := mix(mix(c0, c1, rate.x), mix(c2, c3, rate.x), rate.y)
-{{end}}
-
-{{if .UseColorM}}
+`)
+	}
+	if options.UseColorM {
+		sb.WriteString(`
 	// Un-premultiply alpha.
 	// When the alpha is 0, 1-sign(alpha) is 1.0, which means division does nothing.
 	clr.rgb /= clr.a + (1-sign(clr.a))
@@ -113,15 +144,19 @@ func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
 	clr *= color
 	// Clamp the output.
 	clr.rgb = min(clr.rgb, clr.a)
-{{else}}
+`)
+	} else {
+		sb.WriteString(`
 	// Apply the color scale.
 	clr *= color
-{{end}}
-
+`)
+	}
+	sb.WriteString(`
 	return clr
 }
-
-`))
+`)
+	return []byte(sb.String())
+}
 
 // ShaderSource returns the built-in shader source based on the given parameters.
 //
@@ -130,40 +165,22 @@ func ShaderSource(filter Filter, address Address, useColorM bool) []byte {
 	shadersM.Lock()
 	defer shadersM.Unlock()
 
-	var c int
+	var colorM int
 	if useColorM {
-		c = 1
+		colorM = 1
 	}
-	if s := shaders[filter][address][c]; s != nil {
+	if s := shaders[filter][address][colorM]; s != nil {
 		return s
 	}
 
-	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, struct {
-		Filter             Filter
-		FilterNearest      Filter
-		FilterLinear       Filter
-		Address            Address
-		AddressUnsafe      Address
-		AddressClampToZero Address
-		AddressRepeat      Address
-		UseColorM          bool
-	}{
-		Filter:             filter,
-		FilterNearest:      FilterNearest,
-		FilterLinear:       FilterLinear,
-		Address:            address,
-		AddressUnsafe:      AddressUnsafe,
-		AddressClampToZero: AddressClampToZero,
-		AddressRepeat:      AddressRepeat,
-		UseColorM:          useColorM,
-	}); err != nil {
-		panic(fmt.Sprintf("builtinshader: tmpl.Execute failed: %v", err))
-	}
+	shader := generateShader(shaderOptions{
+		Filter:    filter,
+		Address:   address,
+		UseColorM: useColorM,
+	})
 
-	b := buf.Bytes()
-	shaders[filter][address][c] = b
-	return b
+	shaders[filter][address][colorM] = shader
+	return shader
 }
 
 var ScreenShaderSource = []byte(`//kage:unit pixels
