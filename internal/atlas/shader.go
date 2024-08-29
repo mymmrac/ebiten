@@ -18,8 +18,6 @@ import (
 	"fmt"
 	"runtime"
 
-	"golang.org/x/sync/errgroup"
-
 	"github.com/hajimehoshi/ebiten/v2/internal/builtinshader"
 	"github.com/hajimehoshi/ebiten/v2/internal/graphics"
 	"github.com/hajimehoshi/ebiten/v2/internal/graphicscommand"
@@ -86,32 +84,38 @@ var (
 )
 
 func init() {
-	var wg errgroup.Group
-	wg.Go(func() error {
+	// var wg errgroup.Group
+	// wg.Go(func() error {
+	{
 		ir, err := graphics.CompileShader([]byte(builtinshader.ShaderSource(builtinshader.FilterNearest, builtinshader.AddressUnsafe, false)))
 		if err != nil {
-			return fmt.Errorf("atlas: compiling the nearest shader failed: %w", err)
+			panic(fmt.Errorf("atlas: compiling the nearest shader failed: %w", err))
 		}
 		NearestFilterShader = NewShader(ir)
-		return nil
-	})
-	wg.Go(func() error {
+	}
+	// return nil
+	// })
+	// wg.Go(func() error {
+	{
 		ir, err := graphics.CompileShader([]byte(builtinshader.ShaderSource(builtinshader.FilterLinear, builtinshader.AddressUnsafe, false)))
 		if err != nil {
-			return fmt.Errorf("atlas: compiling the linear shader failed: %w", err)
+			panic(fmt.Errorf("atlas: compiling the linear shader failed: %w", err))
 		}
 		LinearFilterShader = NewShader(ir)
-		return nil
-	})
-	wg.Go(func() error {
+	}
+	// return nil
+	// })
+	// wg.Go(func() error {
+	{
 		ir, err := graphics.CompileShader([]byte(builtinshader.ClearShaderSource))
 		if err != nil {
-			return fmt.Errorf("atlas: compiling the clear shader failed: %w", err)
+			panic(fmt.Errorf("atlas: compiling the clear shader failed: %w", err))
 		}
 		clearShader = NewShader(ir)
-		return nil
-	})
-	if err := wg.Wait(); err != nil {
-		panic(err)
 	}
+	// return nil
+	// })
+	// if err := wg.Wait(); err != nil {
+	// 	panic(err)
+	// }
 }
