@@ -112,7 +112,7 @@ func (cs *compileState) parseExpr(block *block, fname string, expr ast.Expr, mar
 		l, r, ok := shaderir.ResolveUntypedConstsForBinaryOp(op2, lhs[0].Const, rhs[0].Const, lhst, rhst)
 		if !ok {
 			// TODO: Show a better type name for untyped constants.
-			cs.addError(e.Pos(), fmt.Sprintf("types don't match: %s %s %s", lhst.String(), op, rhst.String()))
+			cs.addError(e.Pos(), fmt.Sprintf("types don't match: %s %s %s", lhst.String(), op.String(), rhst.String()))
 			return nil, nil, nil, false
 		}
 		lhs[0].Const, rhs[0].Const = l, r
@@ -145,7 +145,7 @@ func (cs *compileState) parseExpr(block *block, fname string, expr ast.Expr, mar
 		t, ok := shaderir.TypeFromBinaryOp(op2, lhst, rhst, lhs[0].Const, rhs[0].Const)
 		if !ok {
 			// TODO: Show a better type name for untyped constants.
-			cs.addError(e.Pos(), fmt.Sprintf("types don't match: %s %s %s", lhst.String(), op, rhst.String()))
+			cs.addError(e.Pos(), fmt.Sprintf("types don't match: %s %s %s", lhst.String(), op.String(), rhst.String()))
 			return nil, nil, nil, false
 		}
 
