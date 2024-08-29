@@ -904,7 +904,7 @@ func (cs *compileState) parseExpr(block *block, fname string, expr ast.Expr, mar
 				},
 			}, nil, nil, true
 		}
-		if m := textureVariableRe.FindStringSubmatch(e.Name); m != nil {
+		if m := regexp.MustCompile(`\A__t(\d+)\z`).FindStringSubmatch(e.Name); m != nil {
 			i, _ := strconv.Atoi(m[1])
 			return []shaderir.Expr{
 				{
